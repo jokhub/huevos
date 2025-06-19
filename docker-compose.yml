@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgis/postgis:13-3.1
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 2005
+      POSTGRES_DB: eggceptional
+    volumes:
+      - ./base_datos.sql:/docker-entrypoint-initdb.d/base_datos.sql

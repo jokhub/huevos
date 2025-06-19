@@ -1,0 +1,1 @@
+java -cp "EggceptionalApp.jar:lib/*" --enable-preview eggceptional.Main
