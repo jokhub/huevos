@@ -5,7 +5,11 @@ import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
+import java.io.PrintWriter;
 import java.sql.*;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
@@ -19,7 +23,7 @@ public class Ventas extends JFrame {
     private JTextField txtCantidad, txtPrecioUnitario, txtTotalVenta;
     private JLabel lblClienteInfoDisplay;
     private JLabel lblPreventistaInfoDisplay; // NUEVO: Para mostrar el preventista seleccionado
-    private JButton btnAgregar, btnFinalizar;
+    private JButton btnAgregar, btnFinalizar, btnGenerarReporte;
 
     // --- Componentes para la Gestión de Clientes ---
     private JTextField txtDniBusquedaCliente;
@@ -212,6 +216,101 @@ public class Ventas extends JFrame {
         add(btnCancelar);
 
 
+        // NUEVO BOTÓN: Generar Reporte
+
+        btnGenerarReporte = new JButton("Generar Reporte");
+btnGenerarReporte.setBounds(380, 670, 180, 30);
+add(btnGenerarReporte);
+
+// Acción del botón
+btnGenerarReporte.addActionListener(e -> {
+    JFrame reporteFrame = new JFrame("Reporte de Ventas");
+    reporteFrame.setSize(1100, 550);
+    reporteFrame.setLocationRelativeTo(null);
+    reporteFrame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+    reporteFrame.setLayout(new BorderLayout());
+
+    // Modelo y tabla
+    DefaultTableModel modelo = new DefaultTableModel();
+    JTable tabla = new JTable(modelo);
+    modelo.setColumnIdentifiers(new String[] {
+        "ID Venta", "DNI", "Nombre Cliente", "Direccion",
+        "Categoria", "Cantidad", "Precio Unidad", "Total"
+    });
+    JScrollPane scrollPane = new JScrollPane(tabla);
+    reporteFrame.add(scrollPane, BorderLayout.CENTER);
+
+    // Panel superior con filtro por fecha
+    JPanel panelFiltro = new JPanel(new FlowLayout(FlowLayout.LEFT));
+    panelFiltro.add(new JLabel("Fecha del reporte (yyyy-MM-dd):"));
+    JTextField campoFecha = new JTextField(10);
+    panelFiltro.add(campoFecha);
+    JButton btnFiltrar = new JButton("Filtrar");
+    panelFiltro.add(btnFiltrar);
+    reporteFrame.add(panelFiltro, BorderLayout.NORTH);
+
+    // Panel inferior con botón exportar
+    JPanel panelBoton = new JPanel(new FlowLayout(FlowLayout.RIGHT));
+    JButton btnExportar = new JButton("Exportar reporte");
+    panelBoton.add(btnExportar);
+    reporteFrame.add(panelBoton, BorderLayout.SOUTH);
+
+    // Acción del botón exportar (pendiente)
+    btnExportar.addActionListener(_ -> {
+        //JOptionPane.showMessageDialog(reporteFrame, "Aquí se exportará el reporte (pendiente)");
+        btnExportar.addActionListener(_ -> {
+    JFileChooser fileChooser = new JFileChooser();
+    fileChooser.setDialogTitle("Guardar reporte como");
+    fileChooser.setSelectedFile(new File("reporte_ventas.csv"));
+
+    int seleccion = fileChooser.showSaveDialog(reporteFrame);
+    if (seleccion == JFileChooser.APPROVE_OPTION) {
+        File archivo = fileChooser.getSelectedFile();
+
+        try (PrintWriter writer = new PrintWriter(archivo)) {
+            // Escribir cabecera
+            for (int i = 0; i < modelo.getColumnCount(); i++) {
+                writer.print(modelo.getColumnName(i));
+                if (i < modelo.getColumnCount() - 1) writer.print(",");
+            }
+            writer.println();
+
+            // Escribir filas
+            for (int fila = 0; fila < modelo.getRowCount(); fila++) {
+                for (int col = 0; col < modelo.getColumnCount(); col++) {
+                    Object valor = modelo.getValueAt(fila, col);
+                    writer.print(valor != null ? valor.toString() : "");
+                    if (col < modelo.getColumnCount() - 1) writer.print(",");
+                }
+                writer.println();
+            }
+
+            JOptionPane.showMessageDialog(reporteFrame, "Reporte exportado correctamente");
+
+        } catch (Exception ex) {
+            JOptionPane.showMessageDialog(reporteFrame, "Error al exportar el reporte: " + ex.getMessage());
+        }
+    }
+});
+
+    });
+
+    // Acción del botón filtrar
+    btnFiltrar.addActionListener(_ -> {
+        String fecha = campoFecha.getText().trim();
+        if (fecha.isEmpty()) {
+            JOptionPane.showMessageDialog(reporteFrame, "Por favor, ingrese una fecha en formato yyyy-MM-dd");
+        } else {
+            cargarDatosDesdeBD(fecha, modelo);
+        }
+    });
+
+    reporteFrame.setVisible(true);
+});
+
+       
+
+
         // --- Lógica de Eventos ---
 
         // Autocompletar precio al cambiar categoría de producto
@@ -278,7 +377,56 @@ public class Ventas extends JFrame {
         setVisible(true);
     }
 
-    // --- Métodos de Gestión de Preventistas (Nuevos) ---
+    //obtener datos desde db para reporte de ventas
+   private void cargarDatosDesdeBD(String fecha, DefaultTableModel modelo) {
+    modelo.setRowCount(0); // Limpiar la tabla
+    String sql = "SELECT " +
+             "dv.id AS id_venta, " +
+             "c.dni, " +
+             "c.nombre AS nombre_cliente, " +
+             "dv.direccion, " +
+             "dv.categoria, " +
+             "dv.cantidad, " +
+             "dv.precio, " +
+             "(dv.cantidad * dv.precio) AS total " +
+             "FROM detalle_venta dv " +
+             "JOIN venta v ON dv.id_venta = v.id " +
+             "JOIN clientes c ON v.id_cliente = c.id " +
+             "WHERE v.fecha_emicion = ?";
+
+    try (Connection conn = ConexionDB.conectar();
+         PreparedStatement ps = conn.prepareStatement(sql)) {
+
+        SimpleDateFormat formato = new SimpleDateFormat("yyyy-MM-dd");
+        java.util.Date utilDate = formato.parse(fecha);
+        java.sql.Date sqlDate = new java.sql.Date(utilDate.getTime());
+
+        ps.setDate(1, sqlDate);
+
+        ResultSet rs = ps.executeQuery();
+        while (rs.next()) {
+            modelo.addRow(new Object[]{
+                rs.getInt("id_venta"),
+                rs.getString("dni"),
+                rs.getString("nombre_cliente"),
+                rs.getString("direccion"),
+                rs.getString("categoria"),
+                rs.getInt("cantidad"),
+                rs.getDouble("precio"),
+                rs.getDouble("total")
+            });
+        }
+
+    } catch (SQLException | ParseException ex) {
+        ex.printStackTrace();
+        JOptionPane.showMessageDialog(null, "Error al cargar datos: " + ex.getMessage());
+    }
+}
+
+
+    
+    
+// --- Métodos de Gestión de Preventistas (Nuevos) ---
     private void buscarPreventistaInterno() {
         String busqueda = txtNombreApellidoPreventistaBusqueda.getText().trim();
         if (busqueda.isEmpty()) {
