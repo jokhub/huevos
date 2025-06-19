@@ -438,7 +438,7 @@ btnGenerarReporte.addActionListener(e -> {
 
         // Consulta para buscar preventistas por nombre o apellido
         // Asume que tienes una columna 'rol' en tu tabla 'empleados' y buscas 'Preventista'
-        String sql = "SELECT id_empleados, nombre, apellido, dni, telefono FROM empleados WHERE (LOWER(nombre) LIKE ? OR LOWER(apellido) LIKE ?) AND LOWER(rol) = 'preventista'";
+        String sql = "SELECT id_empleados, nombre, apellido, dni, telefono FROM empleados WHERE (LOWER(nombre) LIKE ? OR LOWER(apellido) LIKE ?) AND LOWER(rol) = 'preventista' AND activo = true";
         try (Connection conn = ConexionDB.conectar();
              PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, "%" + busqueda.toLowerCase() + "%");
