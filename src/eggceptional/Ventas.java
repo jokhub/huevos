@@ -499,25 +499,28 @@ btnGenerarReporte.addActionListener(e -> {
     // --- Métodos de Gestión de Cliente (Originales, sin cambios de lógica) ---
 
     private void buscarClienteInterno() {
-        String dni = txtDniBusquedaCliente.getText().trim();
-        if (dni.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Por favor, ingrese un DNI para buscar.", "Campo Vacío", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        if (!dni.matches("\\d+")) {
-            JOptionPane.showMessageDialog(this, "El DNI debe contener solo números.", "Entrada Inválida", JOptionPane.WARNING_MESSAGE);
-            return;
-        }
+    String dni = txtDniBusquedaCliente.getText().trim();
+    if (dni.isEmpty()) {
+        JOptionPane.showMessageDialog(this, "Por favor, ingrese un DNI para buscar.", "Campo Vacío", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
+    if (!dni.matches("\\d+")) {
+        JOptionPane.showMessageDialog(this, "El DNI debe contener solo números.", "Entrada Inválida", JOptionPane.WARNING_MESSAGE);
+        return;
+    }
 
-        modeloTablaClientesBusqueda.setRowCount(0);
+    modeloTablaClientesBusqueda.setRowCount(0);
 
-        String sql = "SELECT id, dni, nombre, apellido, telefono, email, direccion FROM clientes WHERE dni = ?";
-        try (Connection conn = ConexionDB.conectar();
-             PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, dni);
-            ResultSet rs = ps.executeQuery();
+    String sql = "SELECT id, dni, nombre, apellido, telefono, email, direccion, activo FROM clientes WHERE dni = ?";
+    try (Connection conn = ConexionDB.conectar();
+         PreparedStatement ps = conn.prepareStatement(sql)) {
+        ps.setString(1, dni);
+        ResultSet rs = ps.executeQuery();
 
-            if (rs.next()) {
+        if (rs.next()) {
+            boolean activo = rs.getBoolean("activo");
+
+            if (activo) {
                 modeloTablaClientesBusqueda.addRow(new Object[]{
                     rs.getInt("id"),
                     rs.getString("dni"),
@@ -532,18 +535,32 @@ btnGenerarReporte.addActionListener(e -> {
                     tablaClientesBusqueda.setRowSelectionInterval(0, 0);
                 }
             } else {
-                int option = JOptionPane.showConfirmDialog(this,
-                        "Cliente con DNI '" + dni + "' no encontrado.\n¿Desea registrar un nuevo cliente?",
-                        "Cliente No Encontrado", JOptionPane.YES_NO_OPTION);
-                if (option == JOptionPane.YES_OPTION) {
-                    registrarNuevoClienteInterno(dni);
+                int confirm = JOptionPane.showConfirmDialog(this,
+                        "El cliente con DNI '" + dni + "' está desactivado.\n¿Desea activarlo?",
+                        "Cliente Desactivado", JOptionPane.YES_NO_OPTION);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    try (PreparedStatement psUpdate = conn.prepareStatement("UPDATE clientes SET activo = TRUE WHERE dni = ?")) {
+                        psUpdate.setString(1, dni);
+                        psUpdate.executeUpdate();
+                        JOptionPane.showMessageDialog(this, "Cliente activado correctamente.", "Activación Exitosa", JOptionPane.INFORMATION_MESSAGE);
+                        buscarClienteInterno(); // vuelve a ejecutar la búsqueda para cargarlo ya activo
+                    }
                 }
             }
-        } catch (SQLException ex) {
-            JOptionPane.showMessageDialog(this, "Error al buscar cliente: " + ex.getMessage(), "Error de BD", JOptionPane.ERROR_MESSAGE);
-            ex.printStackTrace();
+        } else {
+            int option = JOptionPane.showConfirmDialog(this,
+                    "Cliente con DNI '" + dni + "' no encontrado.\n¿Desea registrar un nuevo cliente?",
+                    "Cliente No Encontrado", JOptionPane.YES_NO_OPTION);
+            if (option == JOptionPane.YES_OPTION) {
+                registrarNuevoClienteInterno(dni);
+            }
         }
+    } catch (SQLException ex) {
+        JOptionPane.showMessageDialog(this, "Error al buscar cliente: " + ex.getMessage(), "Error de BD", JOptionPane.ERROR_MESSAGE);
+        ex.printStackTrace();
     }
+}
+
 
     private void registrarNuevoClienteInterno(String dniPrellenado) {
         JTextField txtDNI = new JTextField(dniPrellenado);
